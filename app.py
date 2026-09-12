@@ -288,28 +288,22 @@ def render_class():
     col_ctl, col_info = st.columns([3, 2])
 
     with col_ctl:
-        st.markdown("#### 🎙️ 录音控制")
+        st.markdown("#### 🎙️ 流式同声传译")
+        st.caption("💡 开启后自动连续识别翻译，无需反复操作。")
         
-        # 方案 1：使用 Streamlit 原生的 audio_input (自 Streamlit 1.38+ 起支持，稳定可靠，支持手机)
-        chunk_sec = st.slider("每段录音长度(秒)", 3, 60, 8)
-        st.caption("💡 方案 1：直接点下方录音按钮开始说，结束后自动识别翻译（最推荐，手机/电脑通用）")
-        try:
-            audio_val = st.audio_input(
-                "🎤 点击开始录音，停止后立即识别",
-            )
-            if audio_val is not None:
-                audio_bytes = audio_val.getvalue()
-                # 判断是否是新的音频数据，防止每次刷新页面重复处理
-                audio_hash = hash(audio_bytes)
-                if "last_audio_hash" not in ss or ss.last_audio_hash != audio_hash:
-                    ss.last_audio_hash = audio_hash
-                    st.info(f"🔊 收到 {len(audio_bytes)} 字节音频，正在识别翻译...")
-                    process_audio_bytes(audio_bytes, ext=".wav")
-                    st.rerun()
-        except AttributeError:
-            # 旧版 Streamlit 没有 audio_input
-            st.warning("⚠️ 你的 Streamlit 版本较旧，没有内置音频输入组件。请升级：`pip install -U streamlit`")
+        # 渲染自定义的前端流式录音组件
+        audio_b64 = realtime_audio_component(key="realtime_audio_comp")
         
+        if audio_b64:
+            audio_hash = hash(audio_b64)
+            if "last_realtime_hash" not in ss or ss.last_realtime_hash != audio_hash:
+                ss.last_realtime_hash = audio_hash
+                st.toast("⚡ 接收到音频切片，正在处理...", icon="⏳")
+                # 前端发来的是 base64 编码的 webm 块
+                audio_bytes = base64.b64decode(audio_b64)
+                process_audio_bytes(audio_bytes, ext=".webm")
+                st.rerun()
+                
         st.markdown("---")
         # 方案 2：文件上传兜底（可以是已经录好的 mp3/wav/m4a 讲课录音）
         st.markdown("#### 📤 方案 2：上传录音文件（批量识别）")
@@ -633,6 +627,14 @@ def render_settings():
         st.warning("所有数据已清理")
         time.sleep(1)
         st.rerun()
+
+
+import base64
+import streamlit.components.v1 as components
+
+# 注册自定义流式音频组件
+realtime_audio_path = os.path.join(os.path.dirname(__file__), "realtime_audio")
+realtime_audio_component = components.declare_component("realtime_audio", path=realtime_audio_path)
 
 
 def main():
