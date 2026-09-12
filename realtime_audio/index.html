@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script>
+    // Streamlit Component API 封装
+    function sendMessageToStreamlit(type, data) {
+      window.parent.postMessage({
+        isStreamlitMessage: true,
+        type: type,
+        ...data
+      }, "*");
+    }
+    function sendValue(value) {
+      sendMessageToStreamlit("setComponentValue", { value: value });
+    }
+    window.addEventListener("message", function(event) {
+      if (event.data.type === "streamlit:render") {
+        sendMessageToStreamlit("setFrameHeight", { height: 100 });
+      }
+    });
+    // 初始化组件
+    sendMessageToStreamlit("streamlit:componentReady", {apiVersion: 1});
+  </script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 10px; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; background-color: transparent;}
+    button { padding: 12px 24px; font-size: 16px; border: none; border-radius: 8px; cursor: pointer; transition: all 0.2s ease; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.1);}
+    button:active { transform: scale(0.95); }
+    #btn-start { background-color: #ff4b4b; color: white; }
+    #btn-start:hover { background-color: #ff3333; }
+    #btn-stop { background-color: #f0f2f6; color: #31333F; display: none; }
+    #btn-stop:hover { background-color: #e0e2e6; }
+    #status { color: #666; font-size: 14px; display: flex; align-items: center; gap: 8px;}
+    .pulse { animation: pulse-animation 1.5s infinite; color: #ff4b4b; font-weight: bold;}
+    @keyframes pulse-animation {
+      0% { opacity: 1; }
+      50% { opacity: 0.5; }
+      100% { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <div style="display: flex; gap: 15px; align-items: center;">
+    <button id="btn-start">🔴 开启真正的同声传译</button>
+    <button id="btn-stop">⏹️ 停止同传</button>
+    <div id="status">💡 准备就绪 (点击开启后，将自动连续倾听并翻译)</div>
+  </div>
+
+  <script>
+    const btnStart = document.getElementById('btn-start');
+    const btnStop = document.getElementById('btn-stop');
+    const status = document.getElementById('status');
+    
+    let isRecording = false;
+    let stream = null;
+    let recorder = null;
+
+    // 核心切片循环逻辑
+    async function recordChunk() {
+        if (!isRecording) return;
+        
+        try {
+            recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+        } catch(e) {
+            // Safari/iOS fallback
+            recorder = new MediaRecorder(stream, { mimeType: 'audio/mp4' });
+        }
+        
+        let chunks = [];
+        recorder.ondataavailable = e => chunks.push(e.data);
+        recorder.onstop = async () => {
+            if (chunks.length > 0) {
+                let blob = new Blob(chunks, { type: recorder.mimeType });
+                let reader = new FileReader();
+                reader.onloadend = function() {
+                    let base64data = reader.result.split(',')[1];
+                    // 将音频切片发送给 Python 后端
+                    sendValue(base64data);
+                }
+                reader.readAsDataURL(blob);
+            }
+            // 只要没点停止，就无缝开启下一个 5 秒切片的录制
+            if (isRecording) {
+                recordChunk();
+            }
+        };
+        
+        recorder.start();
+        
+        // 每 5 秒主动掐断一次，生成独立有效的音频文件发给硅基流动 API
+        setTimeout(() => {
+            if (recorder && recorder.state === "recording") {
+                recorder.stop(); // 触发 onstop
+            }
+        }, 5000); 
+    }
+
+    btnStart.onclick = async () => {
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            isRecording = true;
+            btnStart.style.display = 'none';
+            btnStop.style.display = 'block';
+            status.innerHTML = "🎙️ 正在倾听中... (每 5 秒自动上屏)";
+            status.classList.add("pulse");
+            recordChunk();
+        } catch (err) {
+            status.textContent = "❌ 无法访问麦克风: " + err.message;
+            status.classList.remove("pulse");
+        }
+    };
+
+    btnStop.onclick = () => {
+        isRecording = false;
+        if (recorder && recorder.state === "recording") {
+            recorder.stop();
+        }
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+        }
+        btnStart.style.display = 'block';
+        btnStop.style.display = 'none';
+        status.innerHTML = "💡 已停止";
+        status.classList.remove("pulse");
+    };
+  </script>
+</body>
+</html>
