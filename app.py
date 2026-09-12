@@ -289,19 +289,23 @@ def render_class():
 
     with col_ctl:
         st.markdown("#### 🎙️ 流式同声传译")
-        st.caption("💡 开启后自动连续识别翻译，无需反复操作。")
+        st.caption("💡 录完一段后，按钮会自动重置并准备好录下一段，实现分段连续同传。")
         
-        # 渲染自定义的前端流式录音组件
-        audio_b64 = realtime_audio_component(key="realtime_audio_comp")
+        # 恢复使用官方绝对稳定、不会消失的麦克风按钮
+        audio_val = st.audio_input(
+            "🎤 点击开始说话，停止后立即识别",
+            key=f"audio_input_{ss.get('audio_key_counter', 0)}" # 动态 key，每次识别完强制刷新组件
+        )
         
-        if audio_b64:
-            audio_hash = hash(audio_b64)
+        if audio_val is not None:
+            audio_bytes = audio_val.getvalue()
+            audio_hash = hash(audio_bytes)
             if "last_realtime_hash" not in ss or ss.last_realtime_hash != audio_hash:
                 ss.last_realtime_hash = audio_hash
-                st.toast("⚡ 接收到音频切片，正在处理...", icon="⏳")
-                # 前端发来的是 base64 编码的 webm 块
-                audio_bytes = base64.b64decode(audio_b64)
-                process_audio_bytes(audio_bytes, ext=".webm")
+                st.toast("⚡ 接收到音频，正在处理...", icon="⏳")
+                process_audio_bytes(audio_bytes, ext=".wav")
+                # 核心魔法：识别完成后，将 key 计数器 +1，这样网页刷新时麦克风组件会完全重置，立刻可以录下一句！
+                ss.audio_key_counter = ss.get('audio_key_counter', 0) + 1
                 st.rerun()
                 
         st.markdown("---")
