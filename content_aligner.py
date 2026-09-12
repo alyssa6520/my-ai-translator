@@ -28,7 +28,7 @@ class ContentAligner:
                 base_url=Config.OPENAI_BASE_URL
             )
             all_embeds = []
-            batch_size = 100
+            batch_size = 10
             for i in range(0, len(texts), batch_size):
                 batch = texts[i:i + batch_size]
                 response = client.embeddings.create(
