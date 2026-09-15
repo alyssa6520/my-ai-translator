@@ -70,22 +70,52 @@ class AudioTranscriber:
         import requests
         url = f"{Config.OPENAI_BASE_URL}/audio/transcriptions"
         headers = {"Authorization": f"Bearer {Config.OPENAI_API_KEY}"}
-        
-        # Streamlit audio_input 可能会产生 mp4 / webm 格式，必须在 filename 里体现
-        # 否则 SiliconFlow 可能会报错 400 不支持的文件类型
-        ext = os.path.splitext(audio_path)[1] or ".wav"
+
+        ext = os.path.splitext(audio_path)[1].lower() or ".wav"
         filename = f"audio{ext}"
 
-        with open(audio_path, "rb") as f:
-            files = {"file": (filename, f, "audio/wav")}
-            data = {"model": Config.WHISPER_MODEL}
-            # SiliconFlow API
-            response = requests.post(url, headers=headers, files=files, data=data)
-            
-        if response.status_code == 200:
-            return response.json().get("text", "")
-        else:
-            raise Exception(f"API Error {response.status_code}: {response.text}")
+        # 根据扩展名动态匹配 Content-Type。
+        # 之前写死 "audio/wav"，但 MediaRecorder 实际产出 webm/mp4，
+        # SiliconFlow 按 MIME 判断文件类型，直接返回 400。
+        CONTENT_TYPE_MAP = {
+            ".wav":  "audio/wav",
+            ".webm": "audio/webm",
+            ".mp3":  "audio/mpeg",
+            ".m4a":  "audio/mp4",
+            ".mp4":  "audio/mp4",
+            ".ogg":  "audio/ogg",
+            ".flac": "audio/flac",
+        }
+        content_type = CONTENT_TYPE_MAP.get(ext, "application/octet-stream")
+
+        # SiliconFlow 高峰期响应极不稳定（实测同一文件 0.9s ~ 45s+），
+        # 读超时给足 150s，超时/连接错误自动重试。
+        MAX_RETRIES = 3
+        last_exc = None
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                with open(audio_path, "rb") as f:
+                    files = {"file": (filename, f, content_type)}
+                    data = {"model": Config.WHISPER_MODEL}
+                    if language:
+                        data["language"] = language
+                    response = requests.post(
+                        url, headers=headers, files=files, data=data,
+                        timeout=(10, 150),
+                    )
+                if response.status_code == 200:
+                    return response.json().get("text", "")
+                # 4xx 客户端错误重试无意义，直接抛
+                raise Exception(f"API Error {response.status_code}: {response.text}")
+            except (requests.Timeout, requests.ConnectionError) as e:
+                last_exc = e
+                if attempt < MAX_RETRIES:
+                    wait = attempt * 2
+                    print(f"[转写] 第 {attempt} 次超时/连接失败，{wait}s 后重试: {e}")
+                    time.sleep(wait)
+            else:
+                break
+        raise last_exc
 
     def _transcribe_with_local(self, audio_path: str, language: Optional[str]) -> str:
         model = self._load_whisper_model()

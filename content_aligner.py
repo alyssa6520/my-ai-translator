@@ -30,7 +30,8 @@ class ContentAligner:
             all_embeds = []
             batch_size = 5
             for i in range(0, len(texts), batch_size):
-                batch = texts[i:i + batch_size]
+                # 对输入文本进行硬截断，防止单页课件文字过多导致 token 超出限制 (bge-m3 限制通常在 512~8192 tokens，保守截断到 1500 字符)
+                batch = [t[:1500] if isinstance(t, str) else t for t in texts[i:i + batch_size]]
                 response = client.embeddings.create(
                     model=Config.EMBEDDING_MODEL,
                     input=batch

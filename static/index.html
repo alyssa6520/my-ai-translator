@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🎓 同声传译学习助手</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                 "Microsoft YaHei", sans-serif;
+    background: #f5f7fa;
+    color: #333;
+    min-height: 100vh;
+  }
+  .header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 24px 20px;
+    text-align: center;
+    box-shadow: 0 2px 12px rgba(102,126,234,0.3);
+  }
+  .header h1 { font-size: 24px; margin-bottom: 6px; }
+  .header p { font-size: 13px; opacity: 0.9; }
+
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+
+  /* ---- 控制面板 ---- */
+  .control-panel {
+    background: white;
+    border-radius: 14px;
+    padding: 18px 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .btn-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .btn {
+    padding: 12px 26px;
+    font-size: 15px;
+    font-weight: 600;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.18s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn-start {
+    background: linear-gradient(135deg, #ff4b4b, #ff6b6b);
+    color: white;
+    box-shadow: 0 4px 12px rgba(255,75,75,0.35);
+  }
+  .btn-start:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(255,75,75,0.5); }
+  .btn-stop {
+    background: #e9ecef;
+    color: #333;
+  }
+  .btn-stop:hover { background: #dee2e6; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: #666;
+  }
+  .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #ccc; transition: background 0.3s;
+  }
+  .dot.connected { background: #4caf50; }
+  .dot.recording { background: #ff4b4b; animation: pulse 1.5s infinite; }
+  @keyframes pulse {
+    0%,100% { opacity: 1; transform: scale(1); }
+    50%     { opacity: 0.4; transform: scale(0.8); }
+  }
+
+  /* ---- 课件上传 ---- */
+  .upload-area {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-top: 14px;
+    border-top: 1px dashed #e0e0e0;
+    font-size: 13px;
+    color: #666;
+    flex-wrap: wrap;
+  }
+  .upload-btn {
+    padding: 8px 16px;
+    background: #f0f2f6;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #333;
+    cursor: pointer;
+    border: none;
+    transition: background 0.15s;
+  }
+  .upload-btn:hover { background: #e0e2e8; }
+  .slide-info { color: #1f77b4; font-weight: 500; }
+
+  /* ---- 转录卡片 ---- */
+  .transcript-list {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .transcript {
+    background: white;
+    border-radius: 14px;
+    padding: 16px 18px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    border-left: 4px solid #667eea;
+    animation: slideIn 0.35s ease;
+  }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(-12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    font-size: 12px;
+    color: #999;
+  }
+  .meta-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .page-tag {
+    background: linear-gradient(135deg, #ff9800, #ffb74d);
+    color: white;
+    padding: 3px 10px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 11px;
+  }
+  .slide-title { color: #555; font-weight: 500; }
+  .original {
+    color: #666;
+    font-size: 14px;
+    line-height: 1.55;
+    margin-bottom: 8px;
+  }
+  .translated {
+    color: #1f77b4;
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 1.6;
+  }
+
+  .empty {
+    text-align: center;
+    color: #aaa;
+    padding: 70px 20px;
+    background: white;
+    border-radius: 14px;
+    font-size: 15px;
+  }
+
+  .error-toast {
+    background: #ffebee;
+    color: #c62828;
+    padding: 12px 16px;
+    border-radius: 10px;
+    margin-bottom: 12px;
+    border-left: 4px solid #f44336;
+    font-size: 14px;
+    animation: slideIn 0.25s ease;
+  }
+
+  .pill {
+    background: #e8f5e9;
+    color: #2e7d32;
+    padding: 2px 8px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  /* ---- 历史记录 ---- */
+  .btn-history {
+    background: #f0f2f6;
+    color: #333;
+  }
+  .btn-history:hover { background: #e0e2e8; }
+
+  .modal-mask {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(30, 35, 50, 0.55);
+    z-index: 100;
+    padding: 30px 16px;
+    overflow-y: auto;
+  }
+  .modal-mask.open { display: flex; align-items: flex-start; justify-content: center; }
+  .modal {
+    background: white;
+    border-radius: 16px;
+    width: 100%;
+    max-width: 860px;
+    padding: 22px 24px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+    animation: slideIn 0.25s ease;
+  }
+  .modal-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #eee;
+  }
+  .modal-head h2 { font-size: 18px; }
+  .modal-close {
+    background: none;
+    border: none;
+    font-size: 22px;
+    cursor: pointer;
+    color: #999;
+    line-height: 1;
+  }
+  .modal-close:hover { color: #333; }
+
+  .session-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 13px 14px;
+    border: 1px solid #eee;
+    border-radius: 12px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+    flex-wrap: wrap;
+  }
+  .session-item:hover { border-color: #667eea; background: #f8f9ff; }
+  .session-date { font-weight: 600; font-size: 14px; white-space: nowrap; }
+  .session-preview {
+    color: #888; font-size: 13px; flex: 1;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    min-width: 120px;
+  }
+  .session-count {
+    background: #eef0f7; color: #555;
+    padding: 2px 10px; border-radius: 10px; font-size: 12px; white-space: nowrap;
+  }
+  .session-actions { display: flex; gap: 6px; }
+  .mini-btn {
+    padding: 5px 12px; font-size: 12px; border: none;
+    border-radius: 8px; cursor: pointer; background: #f0f2f6; color: #333;
+  }
+  .mini-btn:hover { background: #e0e2e8; }
+  .mini-btn.danger { background: #ffebee; color: #c62828; }
+  .mini-btn.danger:hover { background: #ffcdd2; }
+
+  .history-empty { text-align: center; color: #aaa; padding: 40px 0; font-size: 14px; }
+  .history-detail-head {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 14px; flex-wrap: wrap; gap: 10px;
+  }
+  .back-btn {
+    padding: 7px 14px; font-size: 13px; border: none;
+    border-radius: 8px; cursor: pointer; background: #f0f2f6; color: #333;
+  }
+  .back-btn:hover { background: #e0e2e8; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🎓 同声传译学习助手</h1>
+  <p>点击开始 → 持续录音 → 实时转写翻译 → 无缝上屏</p>
+</div>
+
+<div class="container">
+
+  <div class="control-panel">
+    <div class="btn-row">
+      <button id="startBtn" class="btn btn-start">🎙️ 开始同声传译</button>
+      <button id="stopBtn"  class="btn btn-stop" style="display:none;">⏹️ 停止</button>
+      <button id="historyBtn" class="btn btn-history">📚 历史记录</button>
+      <div class="status">
+        <span class="dot" id="statusDot"></span>
+        <span id="statusText">准备就绪</span>
+      </div>
+    </div>
+
+    <div class="upload-area">
+      <span>📄 课件（可选）：</span>
+      <label class="upload-btn">
+        上传 PDF / PPTX
+        <input type="file" id="slideFile" accept=".pdf,.pptx,.ppt" style="display:none;">
+      </label>
+      <span id="slideInfo"></span>
+    </div>
+  </div>
+
+  <div id="errorContainer"></div>
+
+  <div id="transcripts" class="transcript-list">
+    <div class="empty">💬 点击「开始同声传译」，实时翻译会显示在这里</div>
+  </div>
+</div>
+
+<!-- 历史记录弹窗 -->
+<div class="modal-mask" id="historyModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 id="historyTitle">📚 历史记录</h2>
+      <button class="modal-close" id="historyClose">&times;</button>
+    </div>
+    <div id="historyBody"></div>
+  </div>
+</div>
+
+<script>
+// ====================================================
+// 配置
+// ====================================================
+const WS_URL   = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
+const CHUNK_MS = 5000;   // 每 5 秒切一次音频
+
+// ====================================================
+// 状态
+// ====================================================
+let ws             = null;
+let mediaStream    = null;
+let isRecording    = false;
+let currentRecorder = null;
+let pingTimer      = null;
+
+// ====================================================
+// DOM
+// ====================================================
+const startBtn   = document.getElementById('startBtn');
+const stopBtn    = document.getElementById('stopBtn');
+const statusDot  = document.getElementById('statusDot');
+const statusText = document.getElementById('statusText');
+const transcriptsDiv = document.getElementById('transcripts');
+const errorContainer = document.getElementById('errorContainer');
+const slideFile  = document.getElementById('slideFile');
+const slideInfo  = document.getElementById('slideInfo');
+
+// ====================================================
+// WebSocket
+// ====================================================
+function connectWS() {
+  return new Promise((resolve, reject) => {
+    if (ws && ws.readyState === WebSocket.OPEN) { resolve(); return; }
+
+    ws = new WebSocket(WS_URL);
+    ws.binaryType = 'arraybuffer';
+
+    ws.onopen = () => {
+      console.log('[WS] connected');
+      statusDot.classList.add('connected');
+      // 心跳保活
+      clearInterval(pingTimer);
+      pingTimer = setInterval(() => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'ping' }));
+        }
+      }, 15000);
+      resolve();
+    };
+
+    ws.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        handleMessage(data);
+      } catch (err) { console.error('消息解析失败', err); }
+    };
+
+    ws.onclose = () => {
+      console.log('[WS] closed');
+      statusDot.classList.remove('connected');
+      clearInterval(pingTimer);
+      if (isRecording) {
+        // 录音中意外断线 → 3 秒后重连
+        setTimeout(() => connectWS().catch(() => {}), 3000);
+      }
+    };
+
+    ws.onerror = (e) => {
+      console.error('[WS] error', e);
+      reject(e);
+    };
+  });
+}
+
+function handleMessage(data) {
+  if (data.type === 'transcript') {
+    renderTranscript(data);
+  } else if (data.type === 'error') {
+    showError(data.message);
+  } else if (data.type === 'cleared') {
+    transcriptsDiv.innerHTML = '<div class="empty">💬 记录已清空</div>';
+  } else if (data.type === 'session-started') {
+    console.log('[会话] 已开始保存：', data.session_id);
+  } else if (data.type === 'session-ended') {
+    console.log('[会话] 已结束并保存');
+  }
+}
+
+// ====================================================
+// 渲染
+// ====================================================
+function renderTranscript(d) {
+  const empty = transcriptsDiv.querySelector('.empty');
+  if (empty) empty.remove();
+
+  const card = document.createElement('div');
+  card.className = 'transcript';
+
+  // --- meta ---
+  const meta = document.createElement('div');
+  meta.className = 'meta';
+
+  const left = document.createElement('div');
+  left.className = 'meta-left';
+
+  if (d.slide_page) {
+    const tag = document.createElement('span');
+    tag.className = 'page-tag';
+    tag.textContent = `第 ${d.slide_page} 页`;
+    left.appendChild(tag);
+
+    if (d.slide_title) {
+      const t = document.createElement('span');
+      t.className = 'slide-title';
+      t.textContent = d.slide_title;
+      left.appendChild(t);
+    }
+    if (d.confidence) {
+      const c = document.createElement('span');
+      c.className = 'pill';
+      c.textContent = `匹配 ${Math.round(d.confidence * 100)}%`;
+      left.appendChild(c);
+    }
+  }
+
+  const right = document.createElement('div');
+  right.textContent = d.timestamp || '';
+
+  meta.appendChild(left);
+  meta.appendChild(right);
+
+  // --- 原文/译文 ---
+  const orig = document.createElement('div');
+  orig.className = 'original';
+  orig.textContent = '🇬🇧 ' + d.original;
+
+  const trans = document.createElement('div');
+  trans.className = 'translated';
+  trans.textContent = '🇨🇳 ' + d.translated;
+
+  card.appendChild(meta);
+  card.appendChild(orig);
+  card.appendChild(trans);
+
+  // 最新的放到最上面
+  transcriptsDiv.insertBefore(card, transcriptsDiv.firstChild);
+}
+
+function showError(msg) {
+  const div = document.createElement('div');
+  div.className = 'error-toast';
+  div.textContent = '⚠️ ' + msg;
+  errorContainer.appendChild(div);
+  setTimeout(() => div.remove(), 6000);
+}
+
+// ====================================================
+// 录音核心（连续切片）
+// ====================================================
+async function startRecording() {
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        channelCount: 1,
+      }
+    });
+
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      await connectWS();
+    }
+
+    isRecording = true;
+    startBtn.style.display = 'none';
+    stopBtn.style.display  = 'inline-flex';
+    statusDot.classList.add('recording');
+    statusText.textContent = `🎙️ 正在同传中（每 ${CHUNK_MS/1000} 秒自动上屏，自动保存双语记录）`;
+
+    // 通知后端开始一个新会话（历史记忆）
+    try { ws.send(JSON.stringify({ type: 'session-start' })); } catch(e) {}
+
+    // 启动连续切片循环
+    recordLoop();
+  } catch (err) {
+    console.error(err);
+    showError('无法访问麦克风：' + err.message);
+  }
+}
+
+async function recordLoop() {
+  while (isRecording) {
+    try {
+      const blob = await recordChunk(CHUNK_MS);
+      if (!blob || blob.size < 800) continue;  // 太短则丢弃
+
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        const buffer = await blob.arrayBuffer();
+        ws.send(buffer);
+        console.log(`[发送] ${buffer.byteLength} bytes`);
+      }
+    } catch (e) {
+      console.error('录音循环异常', e);
+      if (!isRecording) break;
+      await new Promise(r => setTimeout(r, 400));
+    }
+  }
+}
+
+function recordChunk(ms) {
+  return new Promise((resolve, reject) => {
+    // 选择当前浏览器支持的最佳格式
+    const candidates = [
+      'audio/webm;codecs=opus',
+      'audio/webm',
+      'audio/mp4',
+      'audio/ogg;codecs=opus',
+    ];
+    let mimeType = '';
+    for (const m of candidates) {
+      if (MediaRecorder.isTypeSupported(m)) { mimeType = m; break; }
+    }
+
+    const recorder = new MediaRecorder(mediaStream,
+      mimeType ? { mimeType } : {});
+    currentRecorder = recorder;
+
+    const chunks = [];
+    recorder.ondataavailable = e => {
+      if (e.data && e.data.size > 0) chunks.push(e.data);
+    };
+    recorder.onstop = () => {
+      currentRecorder = null;
+      resolve(new Blob(chunks, { type: mimeType || 'audio/webm' }));
+    };
+    recorder.onerror = (e) => {
+      currentRecorder = null;
+      reject(e);
+    };
+
+    recorder.start();
+    setTimeout(() => {
+      if (recorder.state === 'recording') recorder.stop();
+    }, ms);
+  });
+}
+
+function stopRecording() {
+  isRecording = false;
+  if (currentRecorder && currentRecorder.state === 'recording') {
+    try { currentRecorder.stop(); } catch(e) {}
+  }
+  if (mediaStream) {
+    mediaStream.getTracks().forEach(t => t.stop());
+    mediaStream = null;
+  }
+  // 通知后端结束会话（历史落盘收尾）
+  try { ws && ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify({ type: 'session-end' })); } catch(e) {}
+  startBtn.style.display = 'inline-flex';
+  stopBtn.style.display  = 'none';
+  statusDot.classList.remove('recording');
+  statusText.textContent = '已停止（记录已保存，可点「历史记录」查看）';
+}
+
+// ====================================================
+// 课件上传
+// ====================================================
+slideFile.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  slideInfo.textContent = '⏳ 解析中...';
+  const form = new FormData();
+  form.append('file', file);
+
+  try {
+    const res = await fetch('/api/upload-slides', { method: 'POST', body: form });
+    const data = await res.json();
+    if (data.error) {
+      slideInfo.textContent = '❌ ' + data.error;
+    } else {
+      slideInfo.innerHTML = `<span class="slide-info">✅ 已加载 ${data.count} 页课件</span>`;
+    }
+  } catch (err) {
+    slideInfo.textContent = '❌ 上传失败';
+  }
+  // 允许重复上传同一个文件
+  slideFile.value = '';
+});
+
+// ====================================================
+// 历史记录（双语记忆）
+// ====================================================
+const historyModal = document.getElementById('historyModal');
+const historyBody  = document.getElementById('historyBody');
+const historyTitle = document.getElementById('historyTitle');
+const historyBtn   = document.getElementById('historyBtn');
+const historyClose = document.getElementById('historyClose');
+
+function openModal()  { historyModal.classList.add('open'); }
+function closeModal() { historyModal.classList.remove('open'); }
+
+historyBtn.addEventListener('click', () => { loadHistoryList(); openModal(); });
+historyClose.addEventListener('click', closeModal);
+historyModal.addEventListener('click', (e) => {
+  if (e.target === historyModal) closeModal();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeModal();
+});
+
+function fmtDate(iso) {
+  if (!iso) return '';
+  return iso.replace('T', ' ');
+}
+
+async function loadHistoryList() {
+  historyTitle.textContent = '📚 历史记录';
+  historyBody.innerHTML = '<div class="history-empty">加载中...</div>';
+  try {
+    const res = await fetch('/api/history');
+    const data = await res.json();
+    const sessions = data.sessions || [];
+    if (!sessions.length) {
+      historyBody.innerHTML = '<div class="history-empty">暂无记录。开始一次同传后，双语内容会自动保存到这里。</div>';
+      return;
+    }
+    historyBody.innerHTML = '';
+    for (const s of sessions) {
+      const item = document.createElement('div');
+      item.className = 'session-item';
+
+      const date = document.createElement('span');
+      date.className = 'session-date';
+      date.textContent = fmtDate(s.started_at);
+
+      const preview = document.createElement('span');
+      preview.className = 'session-preview';
+      preview.textContent = s.preview ? s.preview + '...' : '（无文本）';
+
+      const count = document.createElement('span');
+      count.className = 'session-count';
+      count.textContent = `${s.count} 段`;
+
+      const actions = document.createElement('div');
+      actions.className = 'session-actions';
+
+      const viewBtn = document.createElement('button');
+      viewBtn.className = 'mini-btn';
+      viewBtn.textContent = '查看';
+      viewBtn.onclick = (e) => { e.stopPropagation(); loadHistoryDetail(s.id); };
+
+      const exportBtn = document.createElement('a');
+      exportBtn.className = 'mini-btn';
+      exportBtn.textContent = '导出 MD';
+      exportBtn.href = `/api/history/${s.id}/export`;
+      exportBtn.download = `${s.id}.md`;
+      exportBtn.onclick = (e) => e.stopPropagation();
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'mini-btn danger';
+      delBtn.textContent = '删除';
+      delBtn.onclick = async (e) => {
+        e.stopPropagation();
+        if (!confirm('确定删除这条记录吗？删除后无法恢复。')) return;
+        const r = await fetch(`/api/history/${s.id}`, { method: 'DELETE' });
+        if (r.ok) { item.remove(); }
+        else { alert('删除失败'); }
+      };
+
+      actions.appendChild(viewBtn);
+      actions.appendChild(exportBtn);
+      actions.appendChild(delBtn);
+
+      item.appendChild(date);
+      item.appendChild(preview);
+      item.appendChild(count);
+      item.appendChild(actions);
+      item.onclick = () => loadHistoryDetail(s.id);
+
+      historyBody.appendChild(item);
+    }
+  } catch (err) {
+    historyBody.innerHTML = '<div class="history-empty">加载失败：' + err.message + '</div>';
+  }
+}
+
+async function loadHistoryDetail(sessionId) {
+  historyTitle.textContent = '📖 会话详情';
+  historyBody.innerHTML = '<div class="history-empty">加载中...</div>';
+  try {
+    const res = await fetch(`/api/history/${sessionId}`);
+    const data = await res.json();
+    if (data.error) {
+      historyBody.innerHTML = '<div class="history-empty">' + data.error + '</div>';
+      return;
+    }
+    const head = document.createElement('div');
+    head.className = 'history-detail-head';
+
+    const back = document.createElement('button');
+    back.className = 'back-btn';
+    back.textContent = '← 返回列表';
+    back.onclick = loadHistoryList;
+
+    const info = document.createElement('div');
+    info.style.cssText = 'font-size:13px;color:#888;';
+    info.textContent = `${fmtDate(data.started_at)} ~ ${data.ended_at ? fmtDate(data.ended_at) : '…'} · 共 ${data.segments.length} 段`;
+
+    head.appendChild(back);
+    head.appendChild(info);
+    historyBody.innerHTML = '';
+    historyBody.appendChild(head);
+
+    if (!data.segments.length) {
+      const emptyDiv = document.createElement('div');
+      emptyDiv.className = 'history-empty';
+      emptyDiv.textContent = '该会话没有转写内容';
+      historyBody.appendChild(emptyDiv);
+      return;
+    }
+
+    // 复用实时区的卡片样式，按时间正序展示
+    const list = document.createElement('div');
+    list.className = 'transcript-list';
+    for (const seg of data.segments) {
+      const card = document.createElement('div');
+      card.className = 'transcript';
+
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      const left = document.createElement('div');
+      left.className = 'meta-left';
+      if (seg.slide_page) {
+        const tag = document.createElement('span');
+        tag.className = 'page-tag';
+        tag.textContent = `第 ${seg.slide_page} 页`;
+        left.appendChild(tag);
+        if (seg.slide_title) {
+          const t = document.createElement('span');
+          t.className = 'slide-title';
+          t.textContent = seg.slide_title;
+          left.appendChild(t);
+        }
+      }
+      const right = document.createElement('div');
+      right.textContent = seg.timestamp || '';
+      meta.appendChild(left);
+      meta.appendChild(right);
+
+      const orig = document.createElement('div');
+      orig.className = 'original';
+      orig.textContent = '🇬🇧 ' + (seg.original || '');
+      const trans = document.createElement('div');
+      trans.className = 'translated';
+      trans.textContent = '🇨🇳 ' + (seg.translated || '');
+
+      card.appendChild(meta);
+      card.appendChild(orig);
+      card.appendChild(trans);
+      list.appendChild(card);
+    }
+    historyBody.appendChild(list);
+  } catch (err) {
+    historyBody.innerHTML = '<div class="history-empty">加载失败：' + err.message + '</div>';
+  }
+}
+
+// ====================================================
+// 事件绑定 & 初始化
+// ====================================================
+startBtn.addEventListener('click', startRecording);
+stopBtn.addEventListener('click', stopRecording);
+
+window.addEventListener('beforeunload', () => {
+  try { ws && ws.close(); } catch(e) {}
+  try {
+    mediaStream && mediaStream.getTracks().forEach(t => t.stop());
+  } catch(e) {}
+});
+
+// 页面加载时预热 WebSocket
+connectWS().catch(() => console.log('WS 预连接失败（不影响后续使用）'));
+</script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+# 密钥与环境
+.env
+venv/
+.venv/
+
+# 运行时数据
+data/
+*.wav
+*.mp3
+*.log
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# IDE / 系统
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

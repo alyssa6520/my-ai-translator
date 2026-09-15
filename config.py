@@ -1,4 +1,6 @@
 import os
+from urllib.parse import urlparse
+
 from dotenv import load_dotenv
 
 load_dotenv(override=True)
@@ -30,3 +32,22 @@ class Config:
 
 
 Config.ensure_dirs()
+
+
+# =====================================================
+# API 直连策略：把 API 域名加入 no_proxy，绕过本地代理
+#
+# 原因：系统代理（如 Clash 127.0.0.1:7890）不在线时，
+# requests / openai(httpx) 会因连不上代理直接报
+# "Connection error"，而 SiliconFlow 等国内 API 本可直连。
+# requests 和 httpx 都会读取 no_proxy 环境变量。
+# 如你的 API 确实需要走代理，设置 BYPASS_PROXY_FOR_API=0
+# =====================================================
+if os.getenv("BYPASS_PROXY_FOR_API", "1") != "0":
+    _api_host = urlparse(Config.OPENAI_BASE_URL).hostname
+    if _api_host:
+        _existing = os.environ.get("no_proxy", os.environ.get("NO_PROXY", ""))
+        if _api_host not in _existing.split(","):
+            _merged = f"{_existing},{_api_host}".lstrip(",")
+            os.environ["no_proxy"] = _merged
+            os.environ["NO_PROXY"] = _merged
